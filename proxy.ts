@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { enfyraConfig } from "./lib/enfyra-config";
 
-const protectedMatchers = ["/", "/chat"];
+const guardedMatchers = ["/", "/chat", "/login"];
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const publicOrigin = getPublicOrigin(request);
-  const shouldGuard = protectedMatchers.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  const shouldGuard = guardedMatchers.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 
   if (!shouldGuard) return NextResponse.next();
 
@@ -21,6 +21,12 @@ export async function proxy(request: NextRequest) {
 
   if (pathname === "/") {
     const response = NextResponse.redirect(`${publicOrigin}${authenticated ? "/chat" : "/login"}`);
+    copySetCookie(userResponse, response);
+    return response;
+  }
+
+  if (pathname === "/login" && authenticated) {
+    const response = NextResponse.redirect(`${publicOrigin}/chat`);
     copySetCookie(userResponse, response);
     return response;
   }
@@ -74,5 +80,5 @@ function copySetCookie(source: Response | null, target: NextResponse) {
 }
 
 export const config = {
-  matcher: ["/", "/chat/:path*"],
+  matcher: ["/", "/chat/:path*", "/login"],
 };
