@@ -4,7 +4,7 @@ const protectedMatchers = ["/", "/chat"];
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const publicUrl = getPublicUrl(request);
+  const publicOrigin = getPublicOrigin(request);
   const shouldGuard = protectedMatchers.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 
   if (!shouldGuard) return NextResponse.next();
@@ -19,13 +19,13 @@ export async function proxy(request: NextRequest) {
   const authenticated = Boolean(userResponse?.ok);
 
   if (pathname === "/") {
-    const response = NextResponse.redirect(new URL(authenticated ? "/chat" : "/login", publicUrl));
+    const response = NextResponse.redirect(`${publicOrigin}${authenticated ? "/chat" : "/login"}`);
     copySetCookie(userResponse, response);
     return response;
   }
 
   if (!authenticated) {
-    return NextResponse.redirect(new URL("/login", publicUrl));
+    return NextResponse.redirect(`${publicOrigin}/login`);
   }
 
   const response = NextResponse.next();
@@ -33,15 +33,33 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
-function getPublicUrl(request: NextRequest) {
-  const url = new URL(request.url);
-  const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
-  const forwardedProto = request.headers.get("x-forwarded-proto");
+function getPublicOrigin(request: NextRequest) {
+  const forwardedHost = normalizeForwardedHost(request.headers.get("x-forwarded-host") || request.headers.get("host"));
+  const forwardedProto = firstForwardedValue(request.headers.get("x-forwarded-proto"));
+  const fallbackUrl = new URL(request.url);
+  const protocol = forwardedProto || fallbackUrl.protocol.replace(":", "");
+  const host = forwardedHost || fallbackUrl.host;
 
-  if (forwardedHost) url.host = forwardedHost;
-  if (forwardedProto) url.protocol = `${forwardedProto}:`;
+  return `${protocol}://${host}`;
+}
 
-  return url;
+function firstForwardedValue(value: string | null) {
+  return value?.split(",")[0]?.trim() || "";
+}
+
+function normalizeForwardedHost(value: string | null) {
+  const host = firstForwardedValue(value);
+  if (!host) return "";
+
+  const url = host.includes("://") ? new URL(host) : new URL(`http://${host}`);
+  const hostname = url.hostname;
+  const port = url.port;
+
+  if (!port || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+    return host;
+  }
+
+  return hostname;
 }
 
 function copySetCookie(source: Response | null, target: NextResponse) {
