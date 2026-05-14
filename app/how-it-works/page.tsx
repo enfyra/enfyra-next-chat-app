@@ -223,6 +223,7 @@ function NextSetup({ jumpTo }: { jumpTo: (id: string) => void }) {
       </p>
       <div className="guide-links">
         <button onClick={() => jumpTo("next-config")}>Config</button>
+        <button onClick={() => jumpTo("next-auth-gate")}>Auth gate</button>
         <button onClick={() => jumpTo("api-client")}>REST client</button>
         <button onClick={() => jumpTo("ui-features")}>UI features</button>
       </div>
@@ -272,6 +273,24 @@ io("/chat", {
   transports: ["polling"],
   upgrade: false,
 })`}</CodeBlock>
+      </section>
+
+      <section id="next-auth-gate" className="guide-card panel">
+        <h2>Route auth gate</h2>
+        <p>
+          `middleware.ts` checks `/enfyra/me` before rendering `/` or `/chat`. Anonymous users go
+          directly to `/login`, so the chat interface never flashes before the redirect. When Enfyra
+          refreshes cookies during `/me`, the middleware forwards the `Set-Cookie` header back to
+          the browser.
+        </p>
+        <CodeBlock>{`// middleware.ts
+if (pathname === "/") {
+  return redirect(authenticated ? "/chat" : "/login")
+}
+
+if (pathname.startsWith("/chat") && !authenticated) {
+  return redirect("/login")
+}`}</CodeBlock>
       </section>
 
       <section id="api-client" className="guide-card panel">

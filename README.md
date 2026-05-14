@@ -17,6 +17,7 @@ For a third-party Next app, these are the important parts:
 3. OAuth sends `cookieBridgePrefix=/enfyra`, so Enfyra can redirect back through this app and set cookies for this origin.
 
 With these rewrites in place, the chat app can call Enfyra auth, REST, refresh-token, and Socket.IO without extra server routes in Next.
+`middleware.ts` also checks `/enfyra/me` before rendering `/` or `/chat`, so an anonymous visitor goes straight to `/login` without briefly rendering the chat UI.
 
 ```bash
 NEXT_PUBLIC_ENFYRA_APP_URL=https://demo.enfyra.io
