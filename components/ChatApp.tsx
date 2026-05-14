@@ -1,9 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import {
   Bell,
+  CheckCheck,
+  Clock,
   Hash,
   Info,
   LogOut,
@@ -15,6 +17,7 @@ import {
   SendHorizontal,
   ShieldCheck,
   Trash2,
+  TriangleAlert,
   UserRoundCheck,
   UsersRound,
   X,
@@ -105,6 +108,7 @@ export default function ChatApp({ initialConversationId }: { initialConversation
   });
 
   const socketRef = useRef<Socket | null>(null);
+  const socketStateRef = useRef<SocketState>(socketState);
   const activeIdRef = useRef(activeId);
   const userRef = useRef<ChatUser | null>(null);
   const chatItemsRef = useRef<ChatListItem[]>([]);
@@ -118,8 +122,16 @@ export default function ChatApp({ initialConversationId }: { initialConversation
   const typingHeartbeat = useRef<ReturnType<typeof setInterval> | null>(null);
   const typingActive = useRef(false);
   const disconnecting = useRef(false);
+  const preservingOlderScroll = useRef(false);
+  const olderScrollSnapshot = useRef({ height: 0, top: 0 });
+  const messageScrollSignature = useRef({ conversationId: "", firstId: "", lastId: "", count: 0, loading: false });
+  const nearBottomBeforeRender = useRef(true);
   const messageLoadRun = useRef(0);
   const reconnectLimit = 5;
+
+  useEffect(() => {
+    socketStateRef.current = socketState;
+  }, [socketState]);
 
   useEffect(() => {
     activeIdRef.current = activeId;
@@ -177,7 +189,8 @@ export default function ChatApp({ initialConversationId }: { initialConversation
       ? `${visibleTypingUsers.length} people are typing`
       : "";
   const realtimeConnected = socketState === "connected";
-  const showReconnectBanner = hasConnectionProblem && socketState !== "connected";
+  const showReconnectBanner = socketState === "failed";
+  const connectionStatusLabel = getConnectionStatusLabel(socketState, reconnectAttempt, reconnectLimit, reconnectCountdown);
 
   async function refreshConversations(silent = false) {
     const currentUser = userRef.current;
@@ -228,7 +241,7 @@ export default function ChatApp({ initialConversationId }: { initialConversation
       setMessages(result.messages);
       setHasOlderMessages(result.hasOlder);
       setOlderCursor(result.messages[0] ? { id: result.messages[0].id, createdAt: result.messages[0].createdAt } : null);
-      setTimeout(() => messageBoxRef.current?.scrollTo({ top: messageBoxRef.current.scrollHeight }), 0);
+      scheduleScrollToBottom();
     } finally {
       if (runId === messageLoadRun.current) setMessagesLoading(false);
     }
@@ -236,7 +249,11 @@ export default function ChatApp({ initialConversationId }: { initialConversation
 
   async function loadOlderMessages() {
     if (!activeId || activeId === "draft" || !olderCursor || olderMessagesLoading || !hasOlderMessages) return;
-    const previousHeight = messageBoxRef.current?.scrollHeight || 0;
+    const box = messageBoxRef.current;
+    if (box) {
+      preservingOlderScroll.current = true;
+      olderScrollSnapshot.current = { height: box.scrollHeight, top: box.scrollTop };
+    }
     setOlderMessagesLoading(true);
     try {
       const result = await fetchMessages(activeId, olderCursor);
@@ -247,10 +264,6 @@ export default function ChatApp({ initialConversationId }: { initialConversation
         return next;
       });
       setHasOlderMessages(result.hasOlder);
-      setTimeout(() => {
-        const box = messageBoxRef.current;
-        if (box) box.scrollTop = box.scrollHeight - previousHeight;
-      }, 0);
     } finally {
       setOlderMessagesLoading(false);
     }
@@ -322,6 +335,7 @@ export default function ChatApp({ initialConversationId }: { initialConversation
 
   function upsertMessage(message: ChatMessage) {
     if (!sameId(message.conversationId, activeIdRef.current)) return;
+    const shouldStickToBottom = isNearBottom() || sameId(message.sender.id, userRef.current?.id);
     setMessages((current) => {
       const existingIndex = current.findIndex((item) => item.id === message.id);
       if (existingIndex >= 0) {
@@ -338,7 +352,7 @@ export default function ChatApp({ initialConversationId }: { initialConversation
       }
       return sortMessages([...current, message]);
     });
-    setTimeout(() => messageBoxRef.current?.scrollTo({ top: messageBoxRef.current.scrollHeight }), 0);
+    if (shouldStickToBottom) scheduleScrollToBottom();
   }
 
   function touchConversationPreview(conversationId: string, text: string, createdAt: string) {
@@ -432,6 +446,8 @@ export default function ChatApp({ initialConversationId }: { initialConversation
       startPresenceHeartbeat();
     });
     socket.on("connect_error", scheduleReconnect);
+    socket.io.on("error", scheduleReconnect);
+    socket.io.on("close", scheduleReconnect);
     socket.on("disconnect", () => {
       stopPresenceHeartbeat();
       if (!disconnecting.current) scheduleReconnect();
@@ -494,17 +510,19 @@ export default function ChatApp({ initialConversationId }: { initialConversation
 
   function scheduleReconnect() {
     const socket = socketRef.current;
-    if (!socket || socket.connected || reconnectTimer.current || socketState === "failed") return;
+    if (!socket || socket.connected || reconnectTimer.current || socketStateRef.current === "failed") return;
     setHasConnectionProblem(true);
     setReconnectAttempt((current) => {
       if (current >= reconnectLimit) {
         setSocketState("failed");
+        socketStateRef.current = "failed";
         clearCountdown();
         return current;
       }
       const next = current + 1;
       const delay = Math.min(1000 * 2 ** Math.max(0, next - 1), 10_000);
       setSocketState("connecting");
+      socketStateRef.current = "connecting";
       startCountdown(delay);
       reconnectTimer.current = setTimeout(() => {
         reconnectTimer.current = null;
@@ -513,6 +531,16 @@ export default function ChatApp({ initialConversationId }: { initialConversation
       }, delay);
       return next;
     });
+  }
+
+  function retryRealtime() {
+    clearReconnectTimer();
+    clearCountdown();
+    setReconnectAttempt(0);
+    setHasConnectionProblem(true);
+    setSocketState("connecting");
+    socketStateRef.current = "connecting";
+    socketRef.current?.connect();
   }
 
   function startCountdown(ms: number) {
@@ -716,6 +744,26 @@ export default function ChatApp({ initialConversationId }: { initialConversation
     typingActive.current = false;
   }
 
+  function isNearBottom() {
+    const box = messageBoxRef.current;
+    if (!box) return true;
+    return box.scrollHeight - box.scrollTop - box.clientHeight < 96;
+  }
+
+  function scrollMessagesToBottom() {
+    const box = messageBoxRef.current;
+    if (!box) return;
+    box.scrollTop = box.scrollHeight;
+    nearBottomBeforeRender.current = true;
+  }
+
+  function scheduleScrollToBottom() {
+    requestAnimationFrame(() => {
+      scrollMessagesToBottom();
+      requestAnimationFrame(scrollMessagesToBottom);
+    });
+  }
+
   function getPresenceUserIds() {
     const ids = new Set<string>();
     for (const item of chatItemsRef.current) {
@@ -818,6 +866,39 @@ export default function ChatApp({ initialConversationId }: { initialConversation
     if (activeId) emitRead(activeId);
   }, [activeId]);
 
+  useLayoutEffect(() => {
+    const box = messageBoxRef.current;
+    const current = {
+      conversationId: activeId,
+      firstId: messages[0]?.id || "",
+      lastId: messages.at(-1)?.id || "",
+      count: messages.length,
+      loading: messagesLoading,
+    };
+    const previous = messageScrollSignature.current;
+    messageScrollSignature.current = current;
+
+    if (!box) return;
+
+    if (preservingOlderScroll.current) {
+      box.scrollTop = olderScrollSnapshot.current.top + (box.scrollHeight - olderScrollSnapshot.current.height);
+      preservingOlderScroll.current = false;
+      nearBottomBeforeRender.current = isNearBottom();
+      return;
+    }
+
+    const conversationChanged = current.conversationId !== previous.conversationId;
+    const finishedLoading = previous.loading && !current.loading;
+    const appendedMessage = current.conversationId === previous.conversationId && current.lastId && current.lastId !== previous.lastId;
+
+    if (conversationChanged || finishedLoading || (appendedMessage && nearBottomBeforeRender.current)) {
+      scrollMessagesToBottom();
+      requestAnimationFrame(scrollMessagesToBottom);
+    }
+
+    nearBottomBeforeRender.current = isNearBottom();
+  }, [activeId, messages, messagesLoading]);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       searchUsers(userSearch, user?.id).then(setUserResults).catch(() => setUserResults([]));
@@ -842,9 +923,9 @@ export default function ChatApp({ initialConversationId }: { initialConversation
             <button className="icon-button header-new-conversation" onClick={() => setNewChatOpen(true)} aria-label="New conversation">
               <MessageSquarePlus size={18} />
             </button>
-            <span className="connection-pill">
+            <span className={`connection-pill ${socketState}`}>
               <span className={`status-dot ${socketState}`} />
-              Realtime · {socketState}{socketState === "connecting" && reconnectAttempt ? ` · retry ${reconnectAttempt}/${reconnectLimit}` : ""}
+              {connectionStatusLabel}
             </span>
             <a className="text-button docs-link" href="/how-it-works">
               <ShieldCheck size={17} />
@@ -861,9 +942,9 @@ export default function ChatApp({ initialConversationId }: { initialConversation
         <div className="disconnect-banner" role="status" aria-live="polite">
           <div className="disconnect-copy">
             <span className="disconnect-pulse" />
-            <p>{socketState === "failed" ? `Realtime connection failed after ${reconnectLimit} retries.` : `Realtime connection lost. ${reconnectCountdown ? `Retrying in ${reconnectCountdown}s.` : "Retrying now."} ${reconnectAttempt ? `Attempt ${reconnectAttempt}/${reconnectLimit}.` : ""}`} Chat is disabled until the socket reconnects.</p>
+            <p>Realtime connection failed after {reconnectLimit} retries. Chat is disabled until you reconnect.</p>
           </div>
-          <button className="disconnect-retry" onClick={() => socketRef.current?.connect()}>Retry now</button>
+          <button className="disconnect-retry" onClick={retryRealtime}>Retry now</button>
         </div>
       ) : null}
 
@@ -894,6 +975,7 @@ export default function ChatApp({ initialConversationId }: { initialConversation
           setComposerText={setComposerText}
           typingLabel={typingLabel}
           messageBoxRef={messageBoxRef}
+          onMessagesScroll={() => { nearBottomBeforeRender.current = isNearBottom(); }}
           onSend={sendMessage}
           onTyping={emitTyping}
           onLoadOlder={loadOlderMessages}
@@ -1033,6 +1115,7 @@ function MessageThread(props: {
   setComposerText: (value: string) => void;
   typingLabel: string;
   messageBoxRef: RefObject<HTMLDivElement | null>;
+  onMessagesScroll: () => void;
   onSend: (event: FormEvent) => void;
   onTyping: (isTyping: boolean) => void;
   onLoadOlder: () => void;
@@ -1063,7 +1146,7 @@ function MessageThread(props: {
         <MessageCircle size={18} />
         <span>Messages are delivered live and remain available after reload.</span>
       </div>
-      <div ref={props.messageBoxRef} className="messages">
+      <div ref={props.messageBoxRef} className="messages" onScroll={props.onMessagesScroll}>
         {props.loading ? <p className="muted center">Loading messages...</p> : null}
         {!props.loading && !hasConversation ? (
           <div className="thread-empty-state">
@@ -1104,10 +1187,16 @@ function MessageThread(props: {
 }
 
 function MessageBubble({ message, own, position, showMeta }: { message: ChatMessage; own: boolean; position: string; showMeta: boolean }) {
+  const statusIcon = message.status === "sending"
+    ? <Clock size={13} />
+    : message.status === "failed"
+      ? <TriangleAlert size={13} />
+      : <CheckCheck size={13} />;
+
   return (
     <div className={`bubble-wrap ${own ? "own" : ""}`}>
       <div className={`bubble ${own ? "own" : ""} ${position}`}>{message.text}</div>
-      {showMeta ? <small className="message-meta">{formatTime(message.createdAt)} {message.status === "sending" ? "sending" : message.status === "failed" ? "failed" : "✓✓"}</small> : null}
+      {showMeta ? <small className="message-meta">{formatTime(message.createdAt)} {statusIcon}</small> : null}
     </div>
   );
 }
@@ -1291,6 +1380,15 @@ function bubblePosition(index: number, total: number) {
   if (index === 0) return "first";
   if (index === total - 1) return "last";
   return "middle";
+}
+
+function getConnectionStatusLabel(state: SocketState, attempt: number, limit: number, countdown: number) {
+  if (state === "connected") return "Realtime · connected";
+  if (state === "failed") return `Realtime · failed · retry ${attempt}/${limit}`;
+  if (state === "offline") return "Realtime · offline";
+  const retry = attempt ? ` · retry ${attempt}/${limit}` : "";
+  const timer = countdown ? ` · ${countdown}s` : "";
+  return `Realtime · connecting${retry}${timer}`;
 }
 
 function formatTime(value: string) {

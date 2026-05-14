@@ -13,14 +13,6 @@ const nextConfig: NextConfig = {
         source: "/socket.io/",
         destination: `${enfyraConfig.enfyraAppUrl}/ws/socket.io/`,
       },
-      {
-        source: "/socket.io",
-        destination: `${enfyraConfig.enfyraAppUrl}/ws/socket.io/`,
-      },
-      {
-        source: "/socket.io/:path*",
-        destination: `${enfyraConfig.enfyraAppUrl}/ws/socket.io/:path*`,
-      },
     ];
   },
 };

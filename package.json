@@ -3,16 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 127.0.0.1 -p 3005",
+    "dev": "next dev",
     "build": "next build",
-    "start": "next start -H 127.0.0.1 -p 3005",
+    "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
+    "@mantine/core": "^9.2.1",
+    "@mantine/hooks": "^9.2.1",
     "lucide-react": "^0.468.0",
-    "next": "^15.1.2",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {

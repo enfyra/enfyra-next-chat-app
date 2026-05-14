@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { MessageSquareText } from "lucide-react";
+import { DatabaseZap, LockKeyhole, MessageSquareText, Network, RadioTower } from "lucide-react";
+import { Alert, Badge, Button, Card, PasswordInput, TextInput } from "@mantine/core";
 import { enfyraConfig } from "@/lib/enfyra-config";
 import { loginWithPassword } from "@/lib/enfyra-api";
 
@@ -34,37 +35,79 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="login-page">
-      <section className="login-card">
-        <div className="brand-block">
-          <span className="brand-mark">
-            <MessageSquareText size={22} />
-          </span>
-          <div>
-            <p>Powered by Enfyra</p>
-            <h1>Next Chat</h1>
-          </div>
-        </div>
-        <p className="muted">
-          Same Enfyra auth, REST proxy, cookie bridge, and Socket.IO config as the Nuxt demo.
-        </p>
-        <form onSubmit={submit} className="login-form">
-          <label>
-            Email
-            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
-          </label>
-          <label>
-            Password
-            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
-          </label>
-          {error ? <p className="error-text">{error}</p> : null}
-          <button type="submit" disabled={loading}>
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
-        </form>
-        <button className="secondary-button" type="button" onClick={googleLogin}>
-          Continue with Google through Enfyra
-        </button>
+    <main className="page-shell login-page">
+      <div className="app-grid-bg" />
+      <header className="login-header app-shell-container">
+        <a className="brand" href="/chat">
+          <span className="brand-mark"><MessageSquareText size={19} /></span>
+          <span>Enfyra Next Chat</span>
+          <span className="brand-powered">Powered by Enfyra</span>
+        </a>
+      </header>
+      <section className="login-shell">
+        <Card className="login-card" withBorder shadow="xl" radius="xl" padding={0}>
+          <aside className="login-product-panel">
+            <div className="login-copy">
+              <Badge color="blue" variant="light" w="fit-content">Powered by Enfyra</Badge>
+              <h1>Enfyra Next Chat</h1>
+              <p className="muted">
+                A third-party Next app using Enfyra for auth, REST data, cookie refresh, and realtime Socket.IO.
+              </p>
+            </div>
+            <div className="login-feature-list">
+              <span><LockKeyhole size={17} /> Auth and OAuth cookie bridge</span>
+              <span><DatabaseZap size={17} /> REST API through the app proxy</span>
+              <span><RadioTower size={17} /> Realtime chat over Socket.IO</span>
+            </div>
+          </aside>
+          <form onSubmit={submit} className="login-form">
+            <div className="login-form-heading">
+              <h2>Sign in</h2>
+              <p>Use the demo account or continue with Google.</p>
+            </div>
+            <TextInput
+              label="Email"
+              size="md"
+              variant="filled"
+              placeholder="Email address"
+              classNames={{ input: "login-control-input", label: "login-control-label" }}
+              value={email}
+              onChange={(event) => setEmail(event.currentTarget.value)}
+              type="email"
+              autoComplete="email"
+            />
+            <PasswordInput
+              label="Password"
+              size="md"
+              variant="filled"
+              classNames={{ input: "login-control-input", label: "login-control-label" }}
+              value={password}
+              onChange={(event) => setPassword(event.currentTarget.value)}
+              autoComplete="current-password"
+              placeholder="Enter password"
+            />
+            {error ? <Alert color="red" variant="light">{error}</Alert> : null}
+            <Button className="login-action-button login-primary-action" size="md" type="submit" loading={loading} leftSection={<LockKeyhole size={18} />}>
+              {loading ? "Working..." : "Continue"}
+            </Button>
+            <Button
+              className="login-action-button google-button"
+              size="md"
+              color="gray"
+              variant="outline"
+              type="button"
+              onClick={googleLogin}
+              disabled={loading}
+              leftSection={<span className="google-mark" aria-hidden="true">G</span>}
+            >
+              Continue with Google
+            </Button>
+            <div className="login-note">
+              <Network size={16} />
+              <span>Enfyra powers the session, data API, and realtime socket behind this Next chat app.</span>
+            </div>
+          </form>
+        </Card>
       </section>
     </main>
   );

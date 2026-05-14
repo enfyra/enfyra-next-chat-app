@@ -278,12 +278,12 @@ io("/chat", {
       <section id="next-auth-gate" className="guide-card panel">
         <h2>Route auth gate</h2>
         <p>
-          `middleware.ts` checks `/enfyra/me` before rendering `/` or `/chat`. Anonymous users go
+          `proxy.ts` checks `/enfyra/me` before rendering `/` or `/chat`. Anonymous users go
           directly to `/login`, so the chat interface never flashes before the redirect. When Enfyra
-          refreshes cookies during `/me`, the middleware forwards the `Set-Cookie` header back to
+          refreshes cookies during `/me`, the proxy forwards the `Set-Cookie` header back to
           the browser.
         </p>
-        <CodeBlock>{`// middleware.ts
+        <CodeBlock>{`// proxy.ts
 if (pathname === "/") {
   return redirect(authenticated ? "/chat" : "/login")
 }

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const protectedMatchers = ["/", "/chat"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const publicUrl = getPublicUrl(request);
   const shouldGuard = protectedMatchers.some((path) => pathname === path || pathname.startsWith(`${path}/`));
