@@ -4,6 +4,7 @@ const protectedMatchers = ["/", "/chat"];
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const publicUrl = getPublicUrl(request);
   const shouldGuard = protectedMatchers.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 
   if (!shouldGuard) return NextResponse.next();
@@ -18,18 +19,29 @@ export async function middleware(request: NextRequest) {
   const authenticated = Boolean(userResponse?.ok);
 
   if (pathname === "/") {
-    const response = NextResponse.redirect(new URL(authenticated ? "/chat" : "/login", request.url));
+    const response = NextResponse.redirect(new URL(authenticated ? "/chat" : "/login", publicUrl));
     copySetCookie(userResponse, response);
     return response;
   }
 
   if (!authenticated) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/login", publicUrl));
   }
 
   const response = NextResponse.next();
   copySetCookie(userResponse, response);
   return response;
+}
+
+function getPublicUrl(request: NextRequest) {
+  const url = new URL(request.url);
+  const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+
+  if (forwardedHost) url.host = forwardedHost;
+  if (forwardedProto) url.protocol = `${forwardedProto}:`;
+
+  return url;
 }
 
 function copySetCookie(source: Response | null, target: NextResponse) {
