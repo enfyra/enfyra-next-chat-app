@@ -1,0 +1,135 @@
+name: Deploy Enfyra Next chat app to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H $VPS_HOST >> ~/.ssh/known_hosts
+
+      - name: Deploy to VPS via SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh $VPS_USER@$VPS_HOST <<'ENDSSH'
+            set -euo pipefail
+
+            export PROJECT_NAME="enfyra-next-chat-app"
+            export APP_DIR="/apps/enfyra-next-chat-app"
+            export REPO_URL="https://github.com/enfyra/enfyra-next-chat-app.git"
+
+            export PATH="$PATH:/usr/bin:/usr/local/bin:$HOME/.local/bin"
+
+            GIT_PATH=$(which git || echo "/usr/bin/git")
+            NPM_PATH=$(which npm || echo "/usr/bin/npm")
+            YARN_PATH=$(which yarn || echo "")
+            PM2_PATH=$(which pm2 || echo "$HOME/.local/bin/pm2")
+
+            if [ -z "$YARN_PATH" ]; then
+              echo "Yarn not found, installing..."
+              $NPM_PATH install -g yarn
+              YARN_PATH=$(which yarn || echo "$HOME/.local/bin/yarn")
+            fi
+
+            echo "=== Starting PM2 Deployment ==="
+            echo "Git: $GIT_PATH"
+            echo "NPM: $NPM_PATH"
+            echo "Yarn: $YARN_PATH"
+            echo "PM2: $PM2_PATH"
+
+            $GIT_PATH config --global --add safe.directory "$APP_DIR" || true
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "Cloning repository into $APP_DIR..."
+              mkdir -p "$(dirname "$APP_DIR")"
+              rm -rf "$APP_DIR"
+              $GIT_PATH clone "$REPO_URL" "$APP_DIR"
+            fi
+
+            cd $APP_DIR || {
+              echo "❌ Failed to navigate to $APP_DIR"
+              exit 1
+            }
+            echo "Current directory: $(pwd)"
+
+            echo "Checking git remote configuration..."
+            CURRENT_REPO_URL=$($GIT_PATH remote get-url origin)
+            echo "Current remote URL: $CURRENT_REPO_URL"
+            $GIT_PATH remote set-url origin "$REPO_URL"
+
+            echo "Pulling latest code..."
+            $GIT_PATH fetch origin main
+            $GIT_PATH reset --hard origin/main
+            rm -rf .next
+            $GIT_PATH clean -fd
+
+            if [ ! -f ecosystem.config.cjs ]; then
+              echo "❌ ecosystem.config.cjs not found in $(pwd)"
+              exit 1
+            fi
+            echo "✅ Code updated to latest from git"
+
+            if [ -f package-lock.json ]; then
+              echo "Removing package-lock.json (using yarn)..."
+              rm -f package-lock.json
+            fi
+
+            echo "Installing dependencies with yarn..."
+            $YARN_PATH install --frozen-lockfile
+
+            echo "Building application..."
+            $YARN_PATH build
+            test -f .next/BUILD_ID || {
+              echo "❌ Next build output is missing"
+              exit 1
+            }
+
+            echo "Stopping PM2 application..."
+            $PM2_PATH stop $PROJECT_NAME || true
+            $PM2_PATH delete $PROJECT_NAME || true
+
+            echo "Starting PM2 application clean..."
+            $PM2_PATH start ecosystem.config.cjs
+
+            echo "Waiting for app initialization..."
+            sleep 10
+            $PM2_PATH status
+
+            echo "=== Health Check ==="
+            sleep 5
+            if $PM2_PATH show $PROJECT_NAME | grep -q "online"; then
+              echo "✅ Application is running successfully"
+            else
+              echo "❌ Application failed to start"
+              $PM2_PATH logs $PROJECT_NAME --lines 20 --nostream
+              exit 1
+            fi
+            if ! curl -fsSI --max-time 10 http://127.0.0.1:3005/ >/dev/null; then
+              echo "❌ Application is online but HTTP health check failed"
+              $PM2_PATH logs $PROJECT_NAME --lines 40 --nostream
+              exit 1
+            fi
+
+            echo "=== Recent logs ==="
+            $PM2_PATH logs $PROJECT_NAME --lines 30 --nostream || {
+              timeout 3s $PM2_PATH logs $PROJECT_NAME --lines 30 || true
+            }
+
+            echo "=== PM2 Deployment completed successfully ==="
+          ENDSSH
