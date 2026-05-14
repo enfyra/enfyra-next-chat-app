@@ -126,6 +126,7 @@ export default function ChatApp({ initialConversationId }: { initialConversation
   const olderScrollSnapshot = useRef({ height: 0, top: 0 });
   const messageScrollSignature = useRef({ conversationId: "", firstId: "", lastId: "", count: 0, loading: false });
   const nearBottomBeforeRender = useRef(true);
+  const pendingInitialScroll = useRef("");
   const messageLoadRun = useRef(0);
   const reconnectLimit = 5;
 
@@ -232,6 +233,7 @@ export default function ChatApp({ initialConversationId }: { initialConversation
       return;
     }
     setMessagesLoading(true);
+    pendingInitialScroll.current = conversationId;
     setMessages([]);
     setHasOlderMessages(false);
     setOlderCursor(null);
@@ -241,7 +243,7 @@ export default function ChatApp({ initialConversationId }: { initialConversation
       setMessages(result.messages);
       setHasOlderMessages(result.hasOlder);
       setOlderCursor(result.messages[0] ? { id: result.messages[0].id, createdAt: result.messages[0].createdAt } : null);
-      scheduleScrollToBottom();
+      scheduleStableScrollToBottom();
     } finally {
       if (runId === messageLoadRun.current) setMessagesLoading(false);
     }
@@ -764,6 +766,12 @@ export default function ChatApp({ initialConversationId }: { initialConversation
     });
   }
 
+  function scheduleStableScrollToBottom() {
+    scheduleScrollToBottom();
+    window.setTimeout(scrollMessagesToBottom, 80);
+    window.setTimeout(scrollMessagesToBottom, 180);
+  }
+
   function getPresenceUserIds() {
     const ids = new Set<string>();
     for (const item of chatItemsRef.current) {
@@ -894,10 +902,19 @@ export default function ChatApp({ initialConversationId }: { initialConversation
     if (conversationChanged || finishedLoading || (appendedMessage && nearBottomBeforeRender.current)) {
       scrollMessagesToBottom();
       requestAnimationFrame(scrollMessagesToBottom);
+      if (conversationChanged || finishedLoading) {
+        window.setTimeout(scrollMessagesToBottom, 80);
+      }
     }
 
     nearBottomBeforeRender.current = isNearBottom();
   }, [activeId, messages, messagesLoading]);
+
+  useEffect(() => {
+    if (!activeId || activeId === "draft" || messagesLoading || pendingInitialScroll.current !== activeId) return;
+    pendingInitialScroll.current = "";
+    scheduleStableScrollToBottom();
+  }, [activeId, messages.length, messagesLoading]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -913,7 +930,10 @@ export default function ChatApp({ initialConversationId }: { initialConversation
         <div className="chat-header app-shell-container">
           <a className="brand" href="/chat">
             <span className="brand-mark"><MessageSquareText size={19} /></span>
-            <span>Enfyra Next Chat</span>
+            <span className="brand-copy">
+              <span className="brand-name">Enfyra Next Chat</span>
+              <span className="brand-subtitle">Third-party realtime app</span>
+            </span>
             <span className="brand-powered">Powered by Enfyra</span>
           </a>
           <div className="header-actions">

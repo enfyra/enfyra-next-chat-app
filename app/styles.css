@@ -132,9 +132,35 @@ p {
 
 .brand {
   min-width: 0;
-  gap: 10px;
+  gap: 11px;
   font-size: 17px;
   font-weight: 700;
+}
+
+.brand-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  line-height: 1.05;
+}
+
+.brand-name,
+.brand-subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-name {
+  color: var(--foreground);
+}
+
+.brand-subtitle {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .brand-mark {
@@ -155,6 +181,7 @@ p {
   padding: 0 9px;
   border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
   border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
   color: var(--accent-strong);
   font-size: 11px;
   font-weight: 700;
@@ -1341,6 +1368,7 @@ p {
   }
 
   .brand-powered,
+  .brand-subtitle,
   .connection-pill,
   .docs-link {
     display: none;
@@ -1439,6 +1467,7 @@ p {
   }
 
   .brand-powered,
+  .brand-subtitle,
   .connection-pill,
   .docs-link {
     display: none;
@@ -1571,7 +1600,8 @@ p {
     font-size: 25px;
   }
 
-  .brand > span:not(.brand-mark):not(.brand-powered) {
+  .brand-copy,
+  .brand-powered {
     display: none;
   }
 }
