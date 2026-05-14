@@ -188,7 +188,7 @@ function EnfyraSetup({ jumpTo }: { jumpTo: (id: string) => void }) {
         <p>
           The frontend can ask for conversations through the current member rows and rely on Enfyra
           RLS to keep users inside their own data boundary. Unread state comes from
-          `chat_message_read` filtered by current user and `is_read = false`; opening a room emits
+          `chat_message_read` filtered by current user and `isRead = false`; opening a room emits
           `chat:read`, and Enfyra updates those rows.
         </p>
       </section>

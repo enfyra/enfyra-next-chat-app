@@ -65,10 +65,10 @@ export function mapUser(value: any): ChatUser {
   return {
     id: idOf(value?.id),
     email: value?.email || "",
-    displayName: value?.displayName || value?.display_name || value?.email || "Unknown user",
-    avatarUrl: value?.avatarUrl || value?.avatar_url || null,
-    statusText: value?.statusText || value?.status_text || null,
-    lastSeenAt: value?.lastSeenAt || value?.last_seen_at || value?.updatedAt || null,
+    displayName: value?.displayName || value?.email || "Unknown user",
+    avatarUrl: value?.avatarUrl || null,
+    statusText: value?.statusText || null,
+    lastSeenAt: value?.lastSeenAt || value?.updatedAt || null,
   };
 }
 
@@ -77,7 +77,7 @@ export function mapMember(value: any): ConversationMember {
     id: idOf(value?.id),
     role: value?.role === "owner" ? "owner" : "member",
     member: mapUser(value?.member || {}),
-    lastReadAt: value?.last_read_at || null,
+    lastReadAt: value?.lastReadAt || null,
   };
 }
 
@@ -88,8 +88,8 @@ export function mapConversation(value: any, members: ConversationMember[] = []):
     title: value?.title || "Untitled chat",
     description: value?.description || null,
     members,
-    lastMessageText: value?.last_message_text || null,
-    lastMessageAt: value?.last_message_at || value?.updatedAt || null,
+    lastMessageText: value?.lastMessageText || null,
+    lastMessageAt: value?.lastMessageAt || value?.updatedAt || null,
     unreadCount: 0,
   };
 }
@@ -100,8 +100,8 @@ export function mapMessage(value: any, conversationId: string): ChatMessage {
     conversationId,
     sender: mapUser(value?.sender || {}),
     text: value?.text || "",
-    createdAt: value?.createdAt || value?.created_at || new Date().toISOString(),
-    status: value?.persist_status === "failed" ? "failed" : "persisted",
+    createdAt: value?.createdAt || new Date().toISOString(),
+    status: value?.persistStatus === "failed" ? "failed" : "persisted",
   };
 }
 
@@ -154,7 +154,7 @@ export async function fetchUnreadConversationIds(userId: string): Promise<Set<st
     query: {
       filter: JSON.stringify({
         member: { id: { _eq: userId } },
-        is_read: { _eq: false },
+        isRead: { _eq: false },
       }),
       fields: "conversation",
       limit: LOAD_ALL_LIMIT,
@@ -271,10 +271,9 @@ export async function createConversation(payload: {
       kind: payload.kind,
       title: payload.title,
       description: null,
-      last_message_text: null,
-      last_message_at: null,
-      created_at: now,
-      updated_at: now,
+      lastMessageText: null,
+      lastMessageAt: null,
+      updatedAt: now,
       createdBy: { id: payload.currentUserId },
     }),
   });
@@ -293,7 +292,7 @@ export function createMembership(conversationId: string, memberId: string, role:
     method: "POST",
     body: JSON.stringify({
       role,
-      joined_at: new Date().toISOString(),
+      joinedAt: new Date().toISOString(),
       conversation: { id: conversationId },
       member: { id: memberId },
     }),
@@ -305,7 +304,7 @@ export async function persistMessageFallback(conversationId: string, senderId: s
     method: "POST",
     body: JSON.stringify({
       text,
-      persist_status: "persisted",
+      persistStatus: "persisted",
       conversation: { id: conversationId },
       sender: { id: senderId },
     }),
@@ -313,9 +312,9 @@ export async function persistMessageFallback(conversationId: string, senderId: s
   await enfyraFetch(`/chat_conversation/${conversationId}`, {
     method: "PATCH",
     body: JSON.stringify({
-      last_message_text: text,
-      last_message_at: createdAt,
-      updated_at: createdAt,
+      lastMessageText: text,
+      lastMessageAt: createdAt,
+      updatedAt: createdAt,
     }),
   });
 }
