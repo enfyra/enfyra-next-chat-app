@@ -25,11 +25,11 @@ const eventRows = [
   ["connect", "Socket.IO opens the /chat namespace through the Next /socket.io proxy.", "Enfyra runs the dynamic gateway connection script, resolves @USER, joins user_<id>, then acknowledges the socket."],
   ["chat:join", "The client asks Enfyra to join all conversation rooms for the current user.", "The websocket script reads memberships and joins conversation:<id> rooms."],
   ["chat:new", "The client sends DM/group members and optional first text.", "The server creates chat_conversation, chat_conversation_member rows, optionally chat_message, then emits chat:new."],
-  ["chat:message", "The client sends a messageId, conversationId, and text.", "The server persists chat_message, updates conversation preview fields, then emits chat:message to the room."],
+  ["chat:message", "The client sends a messageId, conversationId, and text.", "The server persists chat_message, points chat_conversation.lastMessage to that row, then emits chat:message to the room."],
   ["chat:read", "The active conversation emits read state when opened or updated.", "The server updates chat_message_read rows and emits chat:read so unread dots clear."],
   ["chat:typing", "Focus/input activity emits isTyping for the selected room.", "The server rebroadcasts transient typing state to the room without writing the database."],
   ["chat:presence", "The client sends the user IDs it needs online state for.", "The server checks Socket.IO user rooms cluster-wide and returns chat:presence:state."],
-  ["chat:delete", "The client asks to leave or delete a DM for everyone.", "The server removes memberships, cascades empty conversations, then emits chat:deleted."],
+  ["chat:delete", "The client asks to leave or delete a DM for everyone.", "The server removes memberships, cascades empty conversations, and message delete hooks keep lastMessage pointing at the newest remaining row."],
 ];
 
 export default function HowItWorksPage() {
@@ -204,7 +204,7 @@ function EnfyraSetup({ jumpTo }: { jumpTo: (id: string) => void }) {
         <CodeBlock>{`client emit chat:message
   -> Enfyra dynamic websocket event "chat:message"
   -> @REPOS.chat_message.create(...)
-  -> @REPOS.chat_conversation.update(...)
+  -> @REPOS.chat_conversation.update({ lastMessage: persistedMessage })
   -> @SOCKET.to("conversation:<id>").emit("chat:message", payload)`}</CodeBlock>
       </section>
     </>

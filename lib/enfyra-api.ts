@@ -82,14 +82,17 @@ export function mapMember(value: any): ConversationMember {
 }
 
 export function mapConversation(value: any, members: ConversationMember[] = []): Conversation {
+  const conversationId = idOf(value?.id);
+  const lastMessage = value?.lastMessage?.id ? mapMessage(value.lastMessage, conversationId) : null;
   return {
-    id: idOf(value?.id),
+    id: conversationId,
     kind: value?.kind === "group" ? "group" : "dm",
     title: value?.title || "Untitled chat",
     description: value?.description || null,
     members,
-    lastMessageText: value?.lastMessageText || null,
-    lastMessageAt: value?.lastMessageAt || value?.updatedAt || null,
+    lastMessage,
+    lastMessageText: lastMessage?.text || null,
+    lastMessageAt: lastMessage?.createdAt || null,
     unreadCount: 0,
   };
 }
@@ -174,37 +177,14 @@ export async function fetchConversationMembers(conversationId: string): Promise<
   return rowsOf<any>(response).map(mapMember).filter((member) => member.id && member.member.id);
 }
 
-async function fetchMembershipConversations(userId: string): Promise<ChatListItem[]> {
-  const response = await enfyraFetch("/chat_conversation_member", {
-    query: {
-      filter: JSON.stringify({ member: { id: { _eq: userId } } }),
-      deep: JSON.stringify({ conversation: {} }),
-      limit: LOAD_ALL_LIMIT,
-    },
-  });
-  const unreadConversationIds = await fetchUnreadConversationIds(userId);
-  const items = rowsOf<any>(response)
-    .map((row): ChatListItem | null => {
-      const conversationRaw = row.conversation || {};
-      const conversationId = idOf(conversationRaw?.id || conversationRaw);
-      if (!conversationId || !conversationRaw?.id) return null;
-      const unreadCount = unreadConversationIds.has(conversationId) ? 1 : 0;
-      const conversation = mapConversation(conversationRaw, [mapMember(row)]);
-      conversation.unreadCount = unreadCount;
-      return {
-        conversation,
-        membership: mapMember(row),
-        members: [],
-        unreadCount,
-      };
-    })
-    .filter(Boolean) as ChatListItem[];
-  return items.sort((a, b) => (b.conversation.lastMessageAt || "").localeCompare(a.conversation.lastMessageAt || ""));
-}
-
 async function fetchRlsConversations(userId: string): Promise<ChatListItem[]> {
   const [response, unreadConversationIds] = await Promise.all([
-    enfyraFetch("/chat_conversation", { query: { limit: LOAD_ALL_LIMIT } }),
+    enfyraFetch("/chat_conversation", {
+      query: {
+        fields: "id,kind,title,description,updatedAt,lastMessage.id,lastMessage.text,lastMessage.createdAt,lastMessage.persistStatus,lastMessage.sender.id,lastMessage.sender.email,lastMessage.sender.displayName,lastMessage.sender.avatarUrl,lastMessage.sender.statusText",
+        limit: LOAD_ALL_LIMIT,
+      },
+    }),
     fetchUnreadConversationIds(userId),
   ]);
   return rowsOf<any>(response)
@@ -226,8 +206,6 @@ async function fetchRlsConversations(userId: string): Promise<ChatListItem[]> {
 }
 
 export async function fetchChatItems(userId: string): Promise<ChatListItem[]> {
-  const membershipItems = await fetchMembershipConversations(userId).catch(() => []);
-  if (membershipItems.length) return membershipItems;
   return fetchRlsConversations(userId);
 }
 
@@ -264,16 +242,12 @@ export async function createConversation(payload: {
   title: string;
   memberIds: string[];
 }) {
-  const now = new Date().toISOString();
   const response = await enfyraFetch("/chat_conversation", {
     method: "POST",
     body: JSON.stringify({
       kind: payload.kind,
       title: payload.title,
       description: null,
-      lastMessageText: null,
-      lastMessageAt: null,
-      updatedAt: now,
       createdBy: { id: payload.currentUserId },
     }),
   });
@@ -300,7 +274,7 @@ export function createMembership(conversationId: string, memberId: string, role:
 }
 
 export async function persistMessageFallback(conversationId: string, senderId: string, text: string, createdAt: string) {
-  await enfyraFetch("/chat_message", {
+  const response = await enfyraFetch("/chat_message", {
     method: "POST",
     body: JSON.stringify({
       text,
@@ -309,12 +283,15 @@ export async function persistMessageFallback(conversationId: string, senderId: s
       sender: { id: senderId },
     }),
   });
+  const persisted = firstRowOf<any>(response);
+  const persistedId = idOf(persisted?.id);
+  const persistedAt = persisted?.createdAt || createdAt;
+  if (!persistedId) return;
   await enfyraFetch(`/chat_conversation/${conversationId}`, {
     method: "PATCH",
     body: JSON.stringify({
-      lastMessageText: text,
-      lastMessageAt: createdAt,
-      updatedAt: createdAt,
+      lastMessage: { id: persistedId },
+      updatedAt: persistedAt,
     }),
   });
 }
