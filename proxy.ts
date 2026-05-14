@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { enfyraConfig } from "./lib/enfyra-config";
 
 const protectedMatchers = ["/", "/chat"];
 
@@ -9,7 +10,7 @@ export async function proxy(request: NextRequest) {
 
   if (!shouldGuard) return NextResponse.next();
 
-  const userResponse = await fetch(new URL("/enfyra/me", request.url), {
+  const userResponse = await fetch(new URL("/me", enfyraConfig.enfyraApiUrl), {
     headers: {
       cookie: request.headers.get("cookie") || "",
       accept: "application/json",
