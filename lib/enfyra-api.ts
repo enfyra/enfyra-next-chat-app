@@ -12,16 +12,18 @@ export const MESSAGE_PAGE_SIZE = 20;
 
 type FetchOptions = RequestInit & {
   query?: Record<string, string | number | boolean | undefined>;
+  redirectOnUnauthorized?: boolean;
 };
 
 export async function enfyraFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
+  const { query, redirectOnUnauthorized = true, ...requestOptions } = options;
   const url = new URL(`/enfyra${path}`, window.location.origin);
-  for (const [key, value] of Object.entries(options.query || {})) {
+  for (const [key, value] of Object.entries(query || {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
 
   const response = await fetch(url, {
-    ...options,
+    ...requestOptions,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
@@ -30,7 +32,7 @@ export async function enfyraFetch<T>(path: string, options: FetchOptions = {}): 
   });
 
   if (!response.ok) {
-    if (response.status === 401) window.location.href = "/login";
+    if (response.status === 401 && redirectOnUnauthorized) window.location.href = "/login";
     const message = await response.text().catch(() => response.statusText);
     throw new Error(message || response.statusText);
   }
@@ -111,6 +113,7 @@ export function mapMessage(value: any, conversationId: string): ChatMessage {
 export async function getMe(): Promise<ChatUser | null> {
   const response = await enfyraFetch("/me", {
     query: { fields: "id,email,displayName,avatarUrl,statusText,lastSeenAt" },
+    redirectOnUnauthorized: false,
   });
   const row = firstRowOf<any>(response);
   return row?.id ? mapUser(row) : null;

@@ -1191,6 +1191,22 @@ p {
   line-height: 1.5;
 }
 
+.client-auth-loading {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  margin: 22vh auto 0;
+  padding: 14px 18px;
+  color: var(--muted-foreground);
+}
+
+.client-auth-loading p {
+  margin: 0;
+}
+
 .error-text {
   color: var(--danger);
   font-size: 14px;

@@ -23,13 +23,13 @@ import {
   X,
 } from "lucide-react";
 import { io, type Socket } from "socket.io-client";
+import { useAuthStore } from "@/lib/auth-store";
 import {
   createConversation,
   deleteConversationForUser,
   fetchChatItems,
   fetchConversationMembers,
   fetchMessages,
-  getMe,
   idOf,
   logout,
   persistMessageFallback,
@@ -72,7 +72,9 @@ const emptyConversation: Conversation = {
 };
 
 export default function ChatApp({ initialConversationId }: { initialConversationId: string }) {
-  const [user, setUser] = useState<ChatUser | null>(null);
+  const user = useAuthStore((state) => state.user);
+  const authStatus = useAuthStore((state) => state.status);
+  const clearAuthUser = useAuthStore((state) => state.clearUser);
   const [chatItems, setChatItems] = useState<ChatListItem[]>([]);
   const [activeId, setActiveId] = useState(initialConversationId || "");
   const [draftConversation, setDraftConversation] = useState<DraftConversation | null>(null);
@@ -830,6 +832,7 @@ export default function ChatApp({ initialConversationId }: { initialConversation
       cancelText: "Stay",
       onConfirm: async () => {
         await logout();
+        clearAuthUser();
         window.location.href = "/login";
       },
     });
@@ -837,16 +840,15 @@ export default function ChatApp({ initialConversationId }: { initialConversation
 
   useEffect(() => {
     let alive = true;
-    getMe()
-      .then(async (me) => {
-        if (!alive) return;
-        if (!me?.id) {
-          window.location.href = "/login";
-          return;
-        }
-        setUser(me);
-        userRef.current = me;
-        const items = await fetchChatItems(me.id);
+    if (authStatus === "loading") return;
+    if (!user?.id) {
+      window.location.href = "/login";
+      return;
+    }
+
+    userRef.current = user;
+    fetchChatItems(user.id)
+      .then((items) => {
         if (!alive) return;
         setChatItems(items);
         setConversationsLoading(false);
@@ -862,7 +864,7 @@ export default function ChatApp({ initialConversationId }: { initialConversation
       alive = false;
       disconnectSocket();
     };
-  }, []);
+  }, [authStatus, initialConversationId, user]);
 
   useEffect(() => {
     if (activeId === "draft") {
@@ -922,6 +924,18 @@ export default function ChatApp({ initialConversationId }: { initialConversation
     }, 250);
     return () => window.clearTimeout(timer);
   }, [userSearch, user?.id]);
+
+  if (!user && conversationsLoading) {
+    return (
+      <main className="page-shell chat-page">
+        <div className="app-grid-bg" />
+        <section className="client-auth-loading panel" aria-live="polite">
+          <MessageSquareText size={24} />
+          <p>Checking Enfyra session...</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="page-shell chat-page">

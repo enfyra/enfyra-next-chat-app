@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { MantineProvider, createTheme } from "@mantine/core";
+import AuthBootstrap from "@/components/AuthBootstrap";
 import "@mantine/core/styles.css";
 import "./styles.css";
 
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         <MantineProvider defaultColorScheme="dark" theme={theme}>
+          <AuthBootstrap />
           {children}
         </MantineProvider>
       </body>

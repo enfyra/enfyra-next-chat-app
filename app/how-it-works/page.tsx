@@ -276,21 +276,21 @@ io("/chat", {
       </section>
 
       <section id="next-auth-gate" className="guide-card panel">
-        <h2>Route auth gate</h2>
+        <h2>Client auth gate</h2>
         <p>
-          `proxy.ts` checks `/enfyra/me` before rendering `/` or `/chat`. Anonymous users go
-          directly to `/login`, so the chat interface never flashes before the redirect. When Enfyra
-          refreshes cookies during `/me`, the proxy forwards the `Set-Cookie` header back to
-          the browser.
+          Next keeps auth in one browser-side Zustand store for this third-party app. A root
+          bootstrap calls same-origin `/enfyra/me` with credentials once, then login and chat pages
+          read the shared auth state. Next rewrites that request to Enfyra App `/api/me`; Enfyra
+          validates the access cookie, refreshes from the refresh cookie when needed, and returns
+          `Set-Cookie` directly to the browser through the rewrite response.
         </p>
-        <CodeBlock>{`// proxy.ts
-if (pathname === "/") {
-  return redirect(authenticated ? "/chat" : "/login")
-}
+        <CodeBlock>{`// lib/auth-store.ts
+const me = await getMe() // fetch("/enfyra/me", { credentials: "include" })
+set({ user: me, status: me?.id ? "authenticated" : "anonymous" })
 
-if (pathname.startsWith("/chat") && !authenticated) {
-  return redirect("/login")
-}`}</CodeBlock>
+// components/ChatApp.tsx
+const user = useAuthStore((state) => state.user)
+if (!user?.id) window.location.href = "/login"`}</CodeBlock>
       </section>
 
       <section id="api-client" className="guide-card panel">

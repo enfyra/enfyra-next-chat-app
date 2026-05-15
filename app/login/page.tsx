@@ -1,23 +1,31 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { DatabaseZap, LockKeyhole, MessageSquareText, Network, RadioTower } from "lucide-react";
 import { Alert, Badge, Button, Card, PasswordInput, TextInput } from "@mantine/core";
 import { enfyraConfig } from "@/lib/enfyra-config";
 import { loginWithPassword } from "@/lib/enfyra-api";
+import { useAuthStore } from "@/lib/auth-store";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("dothinh115@gmail.com");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const status = useAuthStore((state) => state.status);
+  const setAuthUser = useAuthStore((state) => state.setUser);
+
+  useEffect(() => {
+    if (status === "authenticated") window.location.replace("/chat");
+  }, [status]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await loginWithPassword(email, password);
+      const user = await loginWithPassword(email, password);
+      setAuthUser(user);
       window.location.href = "/chat";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
