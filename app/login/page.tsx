@@ -42,6 +42,8 @@ export default function LoginPage() {
     window.location.href = oauthUrl.toString();
   }
 
+  if (status === "loading" || status === "authenticated") return null;
+
   return (
     <main className="page-shell login-page">
       <div className="app-grid-bg" />

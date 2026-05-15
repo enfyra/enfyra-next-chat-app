@@ -925,17 +925,7 @@ export default function ChatApp({ initialConversationId }: { initialConversation
     return () => window.clearTimeout(timer);
   }, [userSearch, user?.id]);
 
-  if (!user && conversationsLoading) {
-    return (
-      <main className="page-shell chat-page">
-        <div className="app-grid-bg" />
-        <section className="client-auth-loading panel" aria-live="polite">
-          <MessageSquareText size={24} />
-          <p>Checking Enfyra session...</p>
-        </section>
-      </main>
-    );
-  }
+  if (authStatus === "loading" || !user) return null;
 
   return (
     <main className="page-shell chat-page">
