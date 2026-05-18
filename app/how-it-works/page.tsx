@@ -126,15 +126,13 @@ Google callback
         <h2>2. Socket connect</h2>
         <p>
           The client opens the `/chat` namespace with `path: "/socket.io"`. Next rewrites the
-          Engine.IO polling transport to Enfyra `/ws/socket.io`. Enfyra authenticates from cookies,
-          runs the dynamic websocket connection script, loads `@USER`, and joins `user_&lt;id&gt;`
-          for per-user delivery.
+          Engine.IO transport to Enfyra `/ws/socket.io`, then Socket.IO negotiates the transport
+          normally. Enfyra authenticates from cookies, runs the dynamic websocket connection script,
+          loads `@USER`, and joins `user_&lt;id&gt;` for per-user delivery.
         </p>
         <CodeBlock>{`io("${enfyraConfig.websocketNamespace}", {
   path: "${enfyraConfig.websocketPath}",
   withCredentials: true,
-  transports: ["polling"],
-  upgrade: false,
 })`}</CodeBlock>
       </section>
 
@@ -288,8 +286,6 @@ export const enfyraConfig = {
 io(enfyraConfig.websocketNamespace, {
   path: enfyraConfig.websocketPath,
   withCredentials: true,
-  transports: ["polling"],
-  upgrade: false,
 })`}</CodeBlock>
       </section>
 

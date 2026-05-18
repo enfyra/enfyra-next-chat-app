@@ -435,8 +435,6 @@ export default function ChatApp({ initialConversationId }: { initialConversation
       path: enfyraConfig.websocketPath,
       withCredentials: true,
       reconnection: false,
-      transports: ["polling"],
-      upgrade: false,
     });
     socketRef.current = socket;
 
