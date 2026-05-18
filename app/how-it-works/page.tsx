@@ -217,9 +217,9 @@ function NextSetup({ jumpTo }: { jumpTo: (id: string) => void }) {
       <h2>Next app</h2>
       <p>
         Next only owns UI state and a small proxy configuration. This is the key point: once
-        `next.config.ts` rewrites REST to `/api` and Socket.IO to `/ws/socket.io`, the app can use
-        Enfyra auth, refresh-token cookies, REST, OAuth, and realtime without building extra backend
-        routes in Next.
+        `next.config.ts` rewrites the local `/enfyra` REST prefix and the Socket.IO transport path,
+        the app can use Enfyra auth, refresh-token cookies, REST, OAuth, and realtime without
+        building extra backend routes in Next.
       </p>
       <div className="guide-links">
         <button onClick={() => jumpTo("next-config")}>Config</button>
@@ -232,43 +232,61 @@ function NextSetup({ jumpTo }: { jumpTo: (id: string) => void }) {
         <h2>Proxy config</h2>
         <p>
           This is the only infrastructure config the Next app needs. `/enfyra/:path*` forwards to
-          Enfyra `/api/:path*`; `/socket.io/:path*` forwards to Enfyra `/ws/socket.io/:path*`.
-          Because the browser calls the Next origin, cookies are carried by normal same-origin
-          credential handling.
+          the configured Enfyra App API URL; `/socket.io/` forwards the Engine.IO transport endpoint
+          to the Enfyra App Socket.IO bridge. Because the browser calls the Next origin, cookies are
+          carried by normal same-origin credential handling.
         </p>
         <CodeBlock>{`// next.config.ts
-const nextConfig = {
+import type { NextConfig } from "next";
+import { enfyraConfig } from "./lib/enfyra-config";
+
+const nextConfig: NextConfig = {
   skipTrailingSlashRedirect: true,
   async rewrites() {
     return [
       {
-        source: "${enfyraConfig.apiProxyPrefix}/:path*",
-        destination: "${enfyraConfig.enfyraApiUrl}/:path*",
-      },
-      {
-        source: "/socket.io/:path*",
-        destination: "${enfyraConfig.enfyraAppUrl}/ws/socket.io/:path*",
+        source: \`\${enfyraConfig.apiProxyPrefix}/:path*\`,
+        destination: \`\${enfyraConfig.enfyraApiUrl}/:path*\`,
       },
       {
         source: "/socket.io/",
-        destination: "${enfyraConfig.enfyraAppUrl}/ws/socket.io/",
+        destination: \`\${enfyraConfig.enfyraAppUrl}/ws/socket.io/\`,
       },
-      {
-        source: "/socket.io",
-        destination: "${enfyraConfig.enfyraAppUrl}/ws/socket.io/",
-      },
-    ]
+    ];
   },
-}`}</CodeBlock>
+};
+
+export default nextConfig;`}</CodeBlock>
+        <p>
+          The values come from the shared Enfyra config, so local/staging/prod only need to change
+          the Enfyra App URL.
+        </p>
+        <CodeBlock>{`// lib/enfyra-config.ts
+const trimRightSlash = (value: string) => value.replace(/\\/+$/, "");
+
+const enfyraAppUrl = trimRightSlash(
+  process.env.NEXT_PUBLIC_ENFYRA_APP_URL ||
+    process.env.ENFYRA_APP_URL ||
+    "https://demo.enfyra.io"
+);
+
+export const enfyraConfig = {
+  appName: process.env.NEXT_PUBLIC_APP_NAME || "Enfyra Next Chat",
+  enfyraAppUrl,
+  enfyraApiUrl: \`\${enfyraAppUrl}/api\`,
+  apiProxyPrefix: "/enfyra",
+  websocketNamespace: "/chat",
+  websocketPath: "/socket.io",
+};`}</CodeBlock>
         <p>
           After that, the client code can stay simple: call `fetch("/enfyra/...")` with
-          `credentials: "include"`, and connect Socket.IO with namespace `/chat` plus path
-          `/socket.io`.
+          `credentials: "include"`, and connect Socket.IO with the configured namespace plus
+          transport path.
         </p>
         <CodeBlock>{`fetch("/enfyra/me", { credentials: "include" })
 
-io("/chat", {
-  path: "/socket.io",
+io(enfyraConfig.websocketNamespace, {
+  path: enfyraConfig.websocketPath,
   withCredentials: true,
   transports: ["polling"],
   upgrade: false,
